@@ -19,25 +19,36 @@ class InputBlock(nn.Module):
 
 
 class WinnerTransformer(nn.Module):
-    def __init__(self, inputblock, transformer, outputblock):
+    _pooling_methods = {'first', 'average'}
+
+    def __init__(self, inputblock, transformer, outputblock, pooling_method='first'):
+        assert pooling_method in self._pooling_methods
+
         super().__init__()
         self.inputblock = inputblock
         self.transformer = transformer
         self.outputblock = outputblock
+        self.pooling_method = pooling_method
 
     def forward(self, x_enc, x_dec):
         x_enc = self.inputblock(x_enc)
         x_dec = self.inputblock(x_dec)
 
         logits = self.transformer(x_enc, x_dec)
-        return self.outputblock(logits[0, :, :])
+        if self.pooling_method == 'first':
+            return self.outputblock(logits[0, :, :])
+        elif self.pooling_method == 'average':
+            return self.outputblock(logits.mean(dim=0))
 
 
 class OutputBlock(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, dropout=0.1):
         super().__init__()
         self.linear = nn.Linear(hidden_size, 2)
+        self.dropout = nn.Dropout(p=dropout)
         self.softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, x):
-        return self.softmax(self.linear(x))
+        x = self.linear(x)
+        x = self.dropout(x)
+        return self.softmax(x)
